@@ -1,0 +1,181 @@
+---
+title: "KNN"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#K Nearest Neighbors 
+
+## Análisis del Problema
+
+
+###Introduction
+El problema es pronosticar el tipo de clase sobre la base del análisis químico. El estudio de la clasificación de los tipos de vidrio fue motivado por la investigación criminológica. En la escena del crimen, el vidrio que queda puede usarse como evidencia (¡si se identifica correctamente!).
+
+**Algoritmo:**
+
+* Calcule la distancia desde x hasta todos los puntos en sus datos.
+* Ordene los puntos en sus datos aumentando la distancia desde x.
+* Predecir la etiqueta mayoritaria de los puntos más cercanos `k`.
+
+Tenga en cuenta que el valor de `k` afecta los resultados, es ideal para probar el modelo para diferentes valores de` k` para obtener mejores resultados y por un
+mejor modelo 
+
+## Entendimiento de los Datos
+
+
+** La base de datos de identificación de vidrio ** de UCI contiene 10 atributos que incluyen `id`. La respuesta es "tipo de vidrio" que tiene 7 valores discretos.
+https://archive.ics.uci.edu/ml/datasets/Glass+Identification
+[UCI Database](https://archive.ics.uci.edu/ml/machine-learning-databases/glass/glass.data) `Dataset`.
+
+###Atributos
+
+* **Id**: 1 to 214 (removed from CSV file)
+* **RI**: refractive index
+* **Na**: Sodium (unit measurement: weight percent in corresponding oxide, as are attributes 4-10)
+* **Mg**: Magnesium
+* **Al**: Aluminum
+* **Si**: Silicon
+* **K**: Potassium
+* **Ca**: Calcium
+* **Ba**: Barium
+* **Fe**: Iron
+* **Type of glass**: (Class Attribute) 
+      + 1 - building_windows_float_processed 
+      + 2 - building_windows_non_float_processed
+      + 3 - vehicle_windows_float_processed
+      + 4 - vehicle_windows_non_float_processed (none in this database)
+      + 5 - containers
+      + 6 - tableware
+      + 7 - headlamps
+
+###Environment setup
+
+Permite instalar y cargar las bibliotecas requeridas.
+
+```{r}
+#install.packages('caTools')  #for train and test data split
+#install.packages('dplyr')    #for Data Manipulation
+#install.packages('ggplot2')  #for Data Visualization
+#install.packages('class')    #KNN 
+#install.packages('caret')    #Confusion Matrix
+#install.packages('corrplot') #Correlation Plot
+```
+
+```{r}
+library(caTools)
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(class)
+library(corrplot)
+library(readr)
+```
+
+```{r}
+glass <- read.csv("datos/glass.data",
+                  col.names=c("id","RI","Na","Mg","Al","Si","K","Ca","Ba","Fe","Type")) %>% 
+select (-id)
+
+```
+
+###Standardize the Data
+
+Es ideal para estandarizar las características de los datos, especialmente con el algoritmo KNN. Vamos a seguir adelante y estandarizar. Aquí estamos usando `scale ()` para
+estandarizar las columnas de características de `glass` y asignarlas a una nueva variable. Excluya la columna de destino `Tipo` mientras escala.
+
+```{r}
+standard.features <- scale(glass[,1:9])
+
+#Une los datos estandarizados con la columna de destino
+data <- cbind(standard.features,glass[10])
+#Verifique si faltan valores para imputar.
+anyNA(data)
+# Parece que los datos están libres de NA
+head(data)
+
+data$Type<- as.factor(glass$Type)
+
+```
+
+###Visualización de datos
+La siguiente gráfica explica la relación entre las diferentes características en el conjunto de datos glass.
+
+```{r}
+corrplot(cor(data[,c(1,2,3,4,5,6,7,8,9)]))
+```
+
+### División de datos de prueba y entrenamiento
+
+Utilizamos `caTools ()` para dividir los conjuntos de datos `data` en` train` y `test` con un` SplitRatio` = 0.70.
+
+```{r}
+
+set.seed(123)
+
+splt <- sample.split(data$Type,SplitRatio = 0.7)
+
+train <- data[splt,]
+
+test <- data[!splt,]
+```
+
+###KNN Model
+
+Usamos `knn ()` para predecir nuestra variable objetivo `Tipo` del conjunto de datos de prueba con` k = 1`.
+```{r}
+
+predicted.type <- knn(train[1:9],test[1:9],train$Type,k=1)
+#Error in prediction
+error <- mean(predicted.type!=test$Type)
+#Confusion Matrix
+confusionMatrix(predicted.type,test$Type)
+```
+
+Los resultados anteriores revelan que nuestro modelo logró una precisión de 
+** 'r (1 error) * 100'% **. Vamos a probar diferentes valores de 'k' y evaluar nuestro modelo.  
+
+
+```{r}
+predicted.type <- NULL
+error.rate <- NULL
+
+for (i in 1:10) {
+  predicted.type <- knn(train[1:9],test[1:9],train$Type,k=i)
+  error.rate[i] <- mean(predicted.type!=test$Type)
+    
+}
+
+knn.error <- as.data.frame(cbind(k=1:10,error.type =error.rate))
+
+```
+
+###Elección del valor K por visualización
+
+Vamos a trazar `error.type` vs` k` usando `ggplot`.
+
+```{r}
+    ggplot(knn.error,aes(k,error.type))+ 
+      geom_point()+ 
+      geom_line() + 
+      scale_x_continuous(breaks=1:10)+ 
+      theme_bw() +
+      xlab("Value of K") +
+      ylab('Error')
+```
+
+La gráfica anterior revela que el error es más bajo cuando `k = 3` y luego salta hacia atrás revelando que` k = 3` es el valor óptimo. Ahora construyamos nuestro
+modelo usando `k = 3` y evaluarlo.
+
+###Result
+```{r}
+predicted.type <- knn(train[1:9],test[1:9],train$Type,k=3)
+#Error in prediction
+error <- mean(predicted.type!=test$Type)
+#Confusion Matrix
+confusionMatrix(predicted.type,test$Type)
+```
+El modelo anterior nos dio una precisión de **`r (1-error)*100` %.**

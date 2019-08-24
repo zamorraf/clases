@@ -1,0 +1,177 @@
+---
+title: "S"
+output:
+  html_document:
+    df_print: paged
+---
+
+**Análisis del Problema**
+
+Los accidentes son eventos complejos y aleatorios en los que se involucra una variedad de
+factores ya sean éstos humanos, ambientales o propios de la mecánica de los vehículos
+involucrados. Por lo tanto, identificar los factores relevantes que influyen en los accidentes de
+tránsito y predecir la cantidad de éstos que ocurrirán durante una ventana de tiempo, resulta ser
+una herramienta de gran ayuda al momento de llevar a cabo planes de seguridad vial y evitar que
+este tipo de siniestros siga en aumento.
+
+UKDriverDeaths es una serie cronológica que da los totales mensuales de conductores de automóviles en Gran Bretaña muertos o gravemente heridos entre enero de 1969 y diciembre de 1984. El uso obligatorio de los cinturones de seguridad fue introducido el 31 de enero de 1983.
+
+Cinturones de seguridad es más información sobre el mismo problema.
+
+**Entendimiento de los Datos**
+
+    Dominio             Descripción 
+
+    1. DriversKilled:   Car drivers killed.
+
+    2. Drivers:         UKDriverDeaths.
+
+    3. Front:           Front-seat passengers killed or seriously injured.
+
+    4. Rear:            Rear-seat passengers killed or seriously injured.
+
+    5. Kms:             Distance driven.
+
+    6. PetrolPrice:     Petrol price.
+
+    7. VanKilled:       number of van ('light goods vehicle') drivers.
+
+    8. Law:             0/1: was the law in effect that month?
+
+**Exploración de los Datos**
+```{r}
+
+#Librerías utilizadas
+library(caTools)
+#SVM lineal
+library(e1071)
+
+#Dataset Seatbelts incluido en R
+datos <- data.frame(Seatbelts)
+#datos <- datos[, c(1:8)]
+
+#La estructura del conjunto de datos:
+str(datos)
+
+#Dividir el conjunto de datos en uno de entrenamiento y otro de pruebas:
+set.seed(5768)
+splt <- sample.split(datos$law, SplitRatio = 0.7)
+datos.entrenamiento <- datos[splt, ]
+datos.prueba <- datos[!splt, ]
+
+```
+
+Es importante siempre validar los rangos de los conjuntos de datos creados, para evitar caer en extrapolación:
+
+```{r}
+
+summary(datos.entrenamiento)
+
+summary(datos.prueba)
+
+```
+
+De acuerdo con los resúmenes anteriores, hay algunas observaciones en el conjunto de datos de prueba cuyo
+rango de la varible kms se extiende más allá del rango en el conjunto de datos de entrenamiento,
+así que vamos a eliminar esas observaciones del conjunto de datos de prueba.
+
+
+```{r}
+
+datos.TamanoInicial=nrow(datos.prueba)
+
+datos.prueba <- datos.prueba[datos.prueba$kms >= 8933,]
+summary(datos.entrenamiento)
+summary(datos.prueba)
+
+```
+
+
+```{r}
+paste("En total, se eliminaron ", datos.TamanoInicial-nrow(datos.prueba), " observaciones.")
+```
+
+
+
+```{r}
+
+par(mfrow = c(3,2)) #crear una cuadrícula de 3 columnas y 2 hileras para ver seis gráficos.
+plot(x = datos.entrenamiento$drivers, y = datos.entrenamiento$law, main = 'Relación entre Law y Drivers', ylab="Law" ,xlab="Drivers") 
+
+plot(x = datos.entrenamiento$front, y = datos.entrenamiento$law, main = 'Relación entre Law y Front', ylab="Law" ,xlab="Front") 
+
+plot(x = datos.entrenamiento$rear, y = datos.entrenamiento$law, main = 'Relación entre Law y Rear', ylab="Law" ,xlab="Rear") 
+
+plot(x = datos.entrenamiento$kms, y = datos.entrenamiento$law, main = 'Relación entre Law y Kms', ylab="Law" ,xlab="Kms") 
+
+plot(x = datos.entrenamiento$PetrolPrice, y = datos.entrenamiento$Law, main = 'Relación entre Law y PetrolPrice', ylab="Law" ,xlab="PetrolPrice")
+
+plot(x = datos.entrenamiento$VanKilled, y = datos.entrenamiento$law, main = 'Relación entre Law y VanKilled', ylab="Law" ,xlab="VanKilled")
+
+
+```
+
+
+En los gráficos creados podemos observar un tipo de relación entre las variables Law y las variables drivers, front, rear, kms, PetrolPrice, VanKilled.Auque esta no sea lineal, si se muestra alguna relación
+
+Necesitamos visualizar la relación entre las diferentes variables, para lo cual podemos crear una matriz de gráficos de dispersión:
+
+
+```{r}
+par(mfrow = c(1,1)) #volver a solo un gráfico por visualización.
+pairs(datos.entrenamiento[!is.na(datos$law), c(1:8)], main = 'Relación entre las variables')
+
+```
+
+La información del gráfico anterior podemos complementarla con una matriz de correlación:
+
+```{r}
+cor(datos.entrenamiento[!is.na(datos.entrenamiento$law), c(1:8)])
+```
+
+Se puede observar que la en la matriz de gráficos de dispersión, existe una correlación, significativa entre las variables DriversKilled y drivers, DriversKilled y front. 
+
+Vamos a crear una matriz de dispersión con las variables que poseen más correlación
+
+```{r}
+cor(datos.entrenamiento[!is.na(datos.entrenamiento$law), c(1:8)])
+```
+
+
+**Modelo de Minería de Datos**
+
+
+Una vez seleccionadas las variables para incluir en el modelo de SVM, se procede a crearlo:
+
+```{r}
+reg.Law <- svm(law  ~ . , data = datos.entrenamiento, kernel='linear',cross=2, scale=FALSE)
+summary(reg.Law)
+```
+
+
+
+```{r}
+datos.prueba$Prediccion <- predict(reg.Law , newdata = datos.prueba)
+```
+
+
+**Evaluación**
+
+
+Finalmente, procedemos a analizar la distribución:
+
+```{r}
+hist(datos.prueba$law - datos.prueba$Prediccion,
+breaks = 50,
+main = 'Distribución de los Residuos en Prueba',
+xlab = 'residuos')
+
+plot(y = datos.prueba$law - datos.prueba$Prediccion,
+     x = datos.prueba$law,
+     main = 'Distribución de los residuos por law',
+     xlab = 'law',
+     ylab = 'residuos')
+
+```
+
+**Resultados**

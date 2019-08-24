@@ -1,0 +1,232 @@
+---
+title: "Bosque aleatoreos"
+date: "8/17/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Análisis del Problema
+
+El deporte, como inustria, mueve millones de dólares al año. Con respecto a las contrataciones, diferentes
+tienen diferentes formas de “agrupar” o “catalogar” a los jugadores, pero en general hay una categoría de
+jugadores sumamente cotizados que son considerados “súper estrellas”. Las implicaciones de estos jugadores
+son muchas, pues no solo representan una gran inversión para el equipo sino que también se convierten en
+una de las razones principales por las cuales el público va al estadio. A nivel de mercadotécnia, también es
+una decsisión súmamente importante pues las súper estrellas suelen representar una de las principales cartas
+comerciales.
+Por estas razones, la decisión de si un jugador puede ser o no una súper estrella es de suma importancia, y
+tener un modelo que pueda predecir potenciales súper estrellas para asisiter en la toma de estas decisiones
+puede ser de suma importancia para diferentes equipos.
+
+## Entendimiento de los Datos
+
+Para analizar este problema, se tiene un conjunto de datos con 263 observaciones y 19 variables:
+- Nombre del jugador: cualitativa; con 263 valores diferentes.
+- ID de la Posición: cualitativa; con 10 valores diferentes entre 0 y 10.
+- Tiros: cuantitativa; cantidad de tiros en la temporada anterior, con un rango entre 19 y 687.
+- Tiros Hechos: cuantitativa; cantidad de tiros anotados en la temporada anterior, con un rango entre 1
+y 238.
+- Puntos Personales: cuantitativa; puntos anotados personalmente por el atleta la temporada anterior,
+con un rango entre 0 y 40.
+- Puntos Totales: cuantitativa; cantidad de puntos que el atleta contribuyó a anotar, con un rango entre
+0 y 130.
+- Asistencias: cuantitativa; cantidad de veces que el atleta contribuyó a quitarle la posesión del balón al
+rival, con un rango entre 0 y 121.
+- Concesiones: cuantitativa; cantidad de veces que una jugada del atleta causó que el rival cediera una
+ventaja a la ofensiva, con un valor entre 0 y 105.
+- Bloqueos: cuantitativa; cantidad de veces que el atleta bloqueó a un rival la temporada anterior, con
+un valor entre 0 y 1377.
+- Asistencias a Bloqueos: cuantitativa; cantidad de veces que el atleta asistió a un compañero a bloquear
+a un rival, con un rango entre 0 y 492.
+- Faltas: cuantitativa; cantidad de veces que el atleta cometió una falta, con un rival entre 0 y 32.
+- Años de profesional: cuantitativa; cantidad de año que el atleta ha jugado a nivel profesional, con un
+rango entre 1 y 24.
+- Tiros en la carrera: cuantitativa; cantidad de tiros en toda la carrera del atleta, con un rango de 19 a
+14053.
+- Tiros hechos en la carrera: cuantitativa; cantidad de tiros hechos en la carrera del atleta, con un rango
+de 4 a 4256.
+- Puntos Personales en la carrera: cuantitativa; cantidad de puntos personales en la carrera del atleta,
+con un rango de 0 a 548.
+- Puntos Totales en la carrera: cuantitativa; puntos totales del atleta en toda su carrera, con un rango de
+2 a 2165.
+- Asistencias en la carrera: cuantitativa; cantidad de asistencias en toda la carrera, con un rango de 3 a
+1659.
+- Concesiones en la carrera: cuantitativa; cantidad de concesiones en toda la carrera, con un rango de 1 a
+1566.
+- Valor para el equipo: cualitativa; valor que puede tener el jugador para el equipo, con cuatro valores
+posibles: Jugador de Rol, Contribuidor, Jugador de Franquicia y Súper Estrella. Esta variable se
+manipuló durante el análisis para convertirla en binaria, respondiendo a la pregunta: ¿Es el jugador
+una súper estrella? donde 0 es ‘No’ y 1 es ‘Sí’.
+
+## Exploración de los Datos
+
+Antes de explorar los datos, es necesario cargarlos y aplicar la transformación respectiva a la variable “valor
+para el equipo”, pues el problema consiste en determinar cuáles jugadores son potencialmente súper estrellas.
+Adicionalmente, se procede a dividir el conjunto de datos en uno de entrenamiento y otro de prueba.
+
+
+```{r}
+library(caTools)
+library(rpart)
+library(randomForest)
+library(neuralnet)
+library(ROCR)
+```
+
+
+```{r}
+datos <- read.csv('datos/Chapter11DataSet_Training.csv', header = T, na.strings = '?')
+datos$Team_Value <- as.character(datos$Team_Value)
+datos[datos$Team_Value != 'Superstar',]$Team_Value <- 0
+datos[datos$Team_Value == 'Superstar',]$Team_Value <- 1
+datos$Team_Value<- as.factor(datos$Team_Value)
+splt <- sample.split(datos$Team_Value, SplitRatio = 0.7)
+entrenamiento <- datos[splt, ]
+prueba <- datos[!splt, ]
+```
+
+Como podemos observar, la mayoría de las observaciones no son súper estrellas. Esto es esperado, pues la
+esta categoría de jugadores generalmente son los menos.
+
+
+```{r}
+barplot(table(entrenamiento$Team_Value),
+main = 'Distribución de Valor para el Equipo',
+ylab = 'Observaciones',
+xlab = '¿Es Súper Estrella? (1 = Sí)')
+```
+
+
+Para efectos de determinar qué variables influencian la determinación de si es una súper estrella o no, podemos
+analizar algunas de las variales que acumulan el desempeño de la carrera.
+En el caso de la variable Career_TP, se puede apreciar una diferencia considerable entre las dos categorías.
+Sin embargo, los valores extremos de la categoría ‘No’ o 0 son mayores. Estos puntos anómalos en esa
+categoría pueden ser los jugadores de franquicia.
+
+
+```{r}
+boxplot(Career_TP ~ Team_Value,
+data = entrenamiento,
+main = 'Distribución de Career_TP por Valor para el Equipo',
+ylab = 'Career_TP',
+xlab = '¿Es Súper Estrella? (1 = Sí)')
+```
+
+
+
+La variable Career_PP se comporta de manera similar:
+
+
+```{r}
+boxplot(Career_PP ~ Team_Value,
+data = entrenamiento,
+main = 'Distribución de Career_PP por Valor para el Equipo',
+ylab = 'Career_PP',
+xlab = '¿Es Súper Estrella? (1 = Sí)')
+```
+
+
+
+
+Y también la variable Career_Assists:
+
+
+```{r}
+boxplot(Career_Assists ~ Team_Value,
+data = entrenamiento,
+main = 'Distribución de Career_Assists por Valor para el Equipo',
+ylab = 'Career_Assists',
+xlab = '¿Es Súper Estrella? (1 = Sí)')
+```
+
+
+
+
+Cuando se analizan las variables a nivel de la temporada anterior, el patrón se mantiene, aunque las diferencias
+son menores:
+
+
+```{r}
+boxplot(Total_Points ~ Team_Value,
+data = entrenamiento,
+main = 'Distribución de Total_Points por Valor para el Equipo',
+ylab = 'Total_Points',
+xlab = '¿Es Súper Estrella? (1 = Sí)')
+```
+
+
+
+
+La variable Career_PP se comporta de manera similar:
+
+
+```{r}
+boxplot(Personal_Points ~ Team_Value,
+data = entrenamiento,
+main = 'Distribución de Personal_Points por Valor para el Equipo',
+ylab = 'Personal_Points',
+xlab = '¿Es Súper Estrella? (1 = Sí)')
+```
+
+
+
+
+Y también la variable Career_Assists:
+
+
+```{r}
+boxplot(Assists ~ Team_Value,
+data = entrenamiento,
+main = 'Distribución de Assists por Valor para el Equipo',
+ylab = 'Assists',
+xlab = '¿Es Súper Estrella? (1 = Sí)')
+```
+
+
+
+
+Hay algunas variables que tienden a favorecer el no, como por ejemplo la cantidad de faltas la temporada
+anterior:
+
+
+```{r}
+boxplot(Fouls ~ Team_Value,
+data = entrenamiento,
+main = 'Distribución de Fouls por Valor para el Equipo',
+ylab = 'Fouls',
+xlab = '¿Es Súper Estrella? (1 = Sí)')
+```
+
+
+
+
+A pesar de que el análisis exploratorio nos indica que podríamos guiarnos nada más por las estadísticas a nivel
+de la carrera, si hacemos esto, corremos el riesgo de no tomar encuenta súper estrellas potenciales que están
+en etapas tempranas en su carrera. Para evitar esto, y para aprovechar también la capacidad de las redes
+neuronales, vamos a tomar en cuenta todas las variables cuantitativas para intentar responder la pregunta.
+
+## Modelo de Minería de Datos
+
+En este caso, se van a utilizar un bosque aleatorio
+
+> Pregunta: evalua la construccion del modelo aqui abajo. Esta correcto? Si no cual correccion require
+
+```{r}
+#crear modelo
+set.seed(14234)
+
+entrenamiento$Team_Value <- as.factor(entrenamiento$Team_Value)
+modelo.bosque <- randomForest(Team_Value ~ Shots + Makes + Personal_Points + Total_Points + Assists + Concessions+ Blocks, data = entrenamiento )
+
+# Cual codigo necesitas para resolverlo?
+
+```
+
+
+```{r}
+#realizar predicciones
+predicciones.bosque <- predict(modelo.bosque, newdata = prueba, type = 'class')
+predicciones.bosque
+```
+
